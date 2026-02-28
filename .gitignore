@@ -20,6 +20,10 @@
 # Documentation (if you want to exclude README)
 README.md
 
+# Markdown files in backend and frontend
+backend/**/*.md
+frontend/**/*.md
+
 # Python
 __pycache__/
 *.py[cod]

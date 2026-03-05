@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ARRAY, Text, Boolean
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, ARRAY, Text, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -8,7 +8,7 @@ class Repository(Base):
     __tablename__ = "repositories"
 
     id = Column(Integer, primary_key=True, index=True)
-    github_repo_id = Column(Integer, unique=True, nullable=False, index=True)
+    github_repo_id = Column(BigInteger, unique=True, nullable=False, index=True)
     full_name = Column(String(255), unique=True, nullable=False, index=True)  # owner/repo format
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

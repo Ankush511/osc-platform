@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ARRAY, Text, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, ARRAY, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -16,7 +16,7 @@ class Issue(Base):
     __tablename__ = "issues"
 
     id = Column(Integer, primary_key=True, index=True)
-    github_issue_id = Column(Integer, nullable=False, index=True)
+    github_issue_id = Column(BigInteger, nullable=False, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Issue details

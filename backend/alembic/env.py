@@ -18,7 +18,8 @@ from app.models import User, Repository, Issue, Contribution
 config = context.config
 
 # Override sqlalchemy.url with the one from settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Escape % for configparser interpolation (e.g. %23 in passwords)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

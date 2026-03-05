@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { vi } from 'vitest'
 
 interface MockSession {
   user?: {
@@ -35,7 +36,7 @@ interface AuthWrapperProps {
 
 export function AuthWrapper({ children, session = createMockSession() }: AuthWrapperProps) {
   return (
-    <SessionProvider session={session}>
+    <SessionProvider session={session as any}>
       <AuthProvider>{children}</AuthProvider>
     </SessionProvider>
   )

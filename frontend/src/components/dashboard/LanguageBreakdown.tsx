@@ -1,53 +1,64 @@
+"use client"
+
+import { motion } from "framer-motion"
+import { GitFork } from "lucide-react"
+
 interface LanguageBreakdownProps {
   contributions: Record<string, number>
 }
 
+const LANG_COLORS: Record<string, string> = {
+  Python: "from-blue-500 to-blue-400",
+  JavaScript: "from-yellow-500 to-yellow-400",
+  TypeScript: "from-blue-600 to-cyan-400",
+  Go: "from-cyan-500 to-cyan-400",
+  Rust: "from-orange-600 to-orange-400",
+  Java: "from-red-500 to-red-400",
+  "C++": "from-pink-500 to-pink-400",
+  Ruby: "from-red-600 to-red-400",
+  PHP: "from-purple-500 to-purple-400",
+}
+
 export default function LanguageBreakdown({ contributions }: LanguageBreakdownProps) {
   const languages = Object.entries(contributions).sort((a, b) => b[1] - a[1])
-  const total = languages.reduce((sum, [_, count]) => sum + count, 0)
-
-  const getLanguageColor = (language: string) => {
-    const colors: Record<string, string> = {
-      Python: 'bg-blue-500',
-      JavaScript: 'bg-yellow-500',
-      TypeScript: 'bg-blue-600',
-      Go: 'bg-cyan-500',
-      Rust: 'bg-orange-600',
-      Java: 'bg-red-500',
-      'C++': 'bg-pink-500',
-      Ruby: 'bg-red-600',
-      PHP: 'bg-purple-500',
-    }
-    return colors[language] || 'bg-gray-500'
-  }
+  const total = languages.reduce((sum, [, count]) => sum + count, 0)
 
   if (languages.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        No language data available yet
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+        <GitFork className="h-10 w-10 mb-3 text-gray-600" />
+        <p className="text-sm">No language data yet</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-4">
-      {languages.map(([language, count]) => {
-        const percentage = (count / total) * 100
+      {languages.map(([lang, count], i) => {
+        const pct = (count / total) * 100
+        const gradient = LANG_COLORS[lang] || "from-gray-500 to-gray-400"
         return (
-          <div key={language}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">{language}</span>
-              <span className="text-sm text-gray-600">
-                {count} ({percentage.toFixed(1)}%)
+          <motion.div
+            key={lang}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.08 }}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium text-gray-300">{lang}</span>
+              <span className="text-xs text-gray-500">
+                {count} · {pct.toFixed(0)}%
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className={`h-2.5 rounded-full ${getLanguageColor(language)}`}
-                style={{ width: `${percentage}%` }}
+            <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.8, delay: i * 0.08 + 0.2 }}
+                className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
               />
             </div>
-          </div>
+          </motion.div>
         )
       })}
     </div>

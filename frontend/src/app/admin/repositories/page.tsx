@@ -78,7 +78,7 @@ export default function RepositoriesManagement() {
     }
   };
 
-  const handleDelete = async (repo: RepositoryManagement) {
+  const handleDelete = async (repo: RepositoryManagement) => {
     if (!confirm(`Are you sure you want to delete ${repo.full_name}? This will remove all associated issues.`)) {
       return;
     }

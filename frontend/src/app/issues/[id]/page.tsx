@@ -1,82 +1,66 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { fetchIssueById } from "@/lib/issues-api"
-import { fetchRepositorySummary, fetchIssueExplanation } from "@/lib/ai-api"
+import { getCurrentUser } from "@/lib/users-api"
 import IssueDetailClient from "@/components/issues/IssueDetailClient"
+import Link from "next/link"
+import { LogoIcon } from "@/components/ui/Logo"
+import { ArrowLeft } from "lucide-react"
 
-interface IssueDetailPageProps {
-  params: {
-    id: string
-  }
+export const dynamic = 'force-dynamic'
+
+interface Props {
+  params: Promise<{ id: string }>
 }
 
-export default async function IssueDetailPage({ params }: IssueDetailPageProps) {
+export default async function IssueDetailPage({ params }: Props) {
+  const { id } = await params
   const session = await auth()
 
   if (!session?.user || !session.accessToken) {
     redirect("/auth/signin")
   }
 
-  const issueId = parseInt(params.id)
+  const issueId = parseInt(id)
+  if (isNaN(issueId)) redirect("/issues")
 
-  if (isNaN(issueId)) {
-    redirect("/issues")
-  }
-
-  // Fetch issue data
   let issue
+  let currentUserId = 0
   try {
-    issue = await fetchIssueById(issueId, session.accessToken)
-  } catch (error) {
-    console.error('Error fetching issue:', error)
+    const [issueData, userData] = await Promise.all([
+      fetchIssueById(issueId, session.accessToken),
+      getCurrentUser(session.accessToken),
+    ])
+    issue = issueData
+    currentUserId = userData.id
+  } catch {
     redirect("/issues")
   }
-
-  // Fetch AI-generated content in parallel
-  const [repositorySummary, issueExplanation] = await Promise.allSettled([
-    fetchRepositorySummary(issue.repository_id, session.accessToken),
-    fetchIssueExplanation(issueId, session.accessToken),
-  ])
-
-  const repoSummary = repositorySummary.status === 'fulfilled' ? repositorySummary.value : null
-  const issueExp = issueExplanation.status === 'fulfilled' ? issueExplanation.value : null
-
-  // Get current user ID from session
-  const currentUserId = session.user.id ? parseInt(session.user.id) : 0
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">
-                Issue Details
-              </h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <a
-                href="/issues"
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                Browse Issues
-              </a>
-              <a
-                href="/dashboard"
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                Dashboard
-              </a>
-            </div>
+    <div className="min-h-screen bg-black relative">
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+      </div>
+
+      <nav className="sticky top-0 z-50 border-b border-white/5 bg-black/50 backdrop-blur-2xl">
+        <div className="max-w-5xl mx-auto px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link href="/issues" className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+              <ArrowLeft className="h-4 w-4" /> Back to Issues
+            </Link>
+            <Link href="/" className="flex items-center space-x-2">
+              <LogoIcon size="sm" />
+              <span className="text-sm font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Contributors.in</span>
+            </Link>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="relative z-10 max-w-5xl mx-auto px-6 lg:px-8 py-8">
         <IssueDetailClient
+          key={issue.id}
           issue={issue}
-          repositorySummary={repoSummary}
-          issueExplanation={issueExp}
           accessToken={session.accessToken}
           currentUserId={currentUserId}
         />

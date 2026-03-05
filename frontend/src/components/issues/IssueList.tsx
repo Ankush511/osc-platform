@@ -1,10 +1,12 @@
-'use client'
+"use client"
 
-import { PaginatedIssuesResponse } from '@/types/issue'
-import IssueCard from './IssueCard'
-import Pagination from './Pagination'
+import { motion } from "framer-motion"
+import { Search, AlertTriangle, Loader2 } from "lucide-react"
+import { PaginatedIssuesResponse } from "@/types/issue"
+import IssueCard from "./IssueCard"
+import Pagination from "./Pagination"
 
-interface IssueListProps {
+interface Props {
   issuesData: PaginatedIssuesResponse | null
   loading: boolean
   error: string | null
@@ -12,101 +14,60 @@ interface IssueListProps {
   onPageChange: (page: number) => void
 }
 
-export default function IssueList({
-  issuesData,
-  loading,
-  error,
-  currentPage,
-  onPageChange,
-}: IssueListProps) {
+export default function IssueList({ issuesData, loading, error, currentPage, onPageChange }: Props) {
   if (loading) {
     return (
       <div className="space-y-4">
         {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-lg shadow p-6 animate-pulse"
-          >
-            <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+          <div key={i} className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 animate-pulse">
+            <div className="h-5 bg-white/10 rounded-lg w-3/4 mb-3" />
+            <div className="h-3 bg-white/5 rounded w-1/3 mb-4" />
+            <div className="h-4 bg-white/5 rounded w-2/3" />
           </div>
         ))}
+        <div className="flex justify-center pt-4">
+          <Loader2 className="h-5 w-5 text-cyan-400 animate-spin" />
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-        <svg
-          className="mx-auto h-12 w-12 text-red-400 mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
-        </svg>
-        <h3 className="text-lg font-medium text-red-900 mb-2">
-          Error Loading Issues
-        </h3>
-        <p className="text-red-700">{error}</p>
+      <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center">
+        <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+        <h3 className="text-lg font-semibold text-white mb-1">Error loading issues</h3>
+        <p className="text-red-300 text-sm">{error}</p>
       </div>
     )
   }
 
   if (!issuesData || issuesData.items.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-12 text-center">
-        <svg
-          className="mx-auto h-12 w-12 text-gray-400 mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          No Issues Found
-        </h3>
-        <p className="text-gray-600">
-          Try adjusting your filters or search query
-        </p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="bg-gradient-to-br from-white/[0.07] to-white/[0.02] border border-white/10 rounded-2xl p-12 text-center"
+      >
+        <Search className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-white mb-2">No issues found</h3>
+        <p className="text-gray-400 text-sm">Try adjusting your filters or search query</p>
+      </motion.div>
     )
   }
 
   return (
     <div>
-      {/* Results Count */}
-      <div className="mb-4 text-sm text-gray-600">
+      <p className="text-xs text-gray-500 mb-4">
         Showing {issuesData.items.length} of {issuesData.total} issues
-      </div>
-
-      {/* Issue Cards */}
-      <div className="space-y-4 mb-6">
-        {issuesData.items.map((issue) => (
-          <IssueCard key={issue.id} issue={issue} />
+      </p>
+      <div className="space-y-3 mb-6">
+        {issuesData.items.map((issue, i) => (
+          <IssueCard key={issue.id} issue={issue} index={i} />
         ))}
       </div>
-
-      {/* Pagination */}
       {issuesData.total_pages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={issuesData.total_pages}
-          onPageChange={onPageChange}
-        />
+        <Pagination currentPage={currentPage} totalPages={issuesData.total_pages} onPageChange={onPageChange} />
       )}
     </div>
   )

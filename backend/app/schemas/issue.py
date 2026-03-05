@@ -98,6 +98,7 @@ class SyncResult(BaseModel):
     issues_closed: int
     errors: List[str] = []
     sync_duration_seconds: float
+    new_issue_ids: List[int] = []
 
 
 class IssueSearchRequest(BaseModel):
@@ -128,7 +129,7 @@ class ClaimResult(BaseModel):
 
 class ReleaseIssueRequest(BaseModel):
     """Request to release an issue"""
-    user_id: int = Field(..., description="ID of the user releasing the issue", gt=0)
+    reason: Optional[str] = Field(None, max_length=100, description="Reason for releasing the issue")
 
 
 class ReleaseResult(BaseModel):
@@ -140,7 +141,6 @@ class ReleaseResult(BaseModel):
 
 class ExtendClaimRequest(BaseModel):
     """Request to extend claim deadline"""
-    user_id: int = Field(..., description="ID of the user requesting extension", gt=0)
     justification: str = Field(..., min_length=10, max_length=1000, description="Reason for extension request")
     extension_days: int = Field(7, ge=1, le=14, description="Number of days to extend (1-14)")
     

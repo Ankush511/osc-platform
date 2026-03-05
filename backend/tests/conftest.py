@@ -11,7 +11,8 @@ os.environ["REDIS_URL"] = "redis://localhost:6379/1"
 os.environ["GITHUB_CLIENT_ID"] = "test_client_id"
 os.environ["GITHUB_CLIENT_SECRET"] = "test_client_secret"
 os.environ["SECRET_KEY"] = "test_secret_key_for_testing_only"
-os.environ["OPENAI_API_KEY"] = "test_openai_key"
+os.environ["AWS_REGION"] = "us-east-1"
+os.environ["BEDROCK_MODEL_ID"] = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # Monkey patch ARRAY to use JSON for SQLite testing BEFORE importing models
 import sqlalchemy

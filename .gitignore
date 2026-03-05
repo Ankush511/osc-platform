@@ -23,6 +23,7 @@ README.md
 # Markdown files in backend and frontend
 backend/**/*.md
 frontend/**/*.md
+ARCHITECTURE.md 
 
 # Python
 __pycache__/

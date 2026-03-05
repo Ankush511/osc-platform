@@ -1,42 +1,53 @@
+"use client"
+
+import { motion } from "framer-motion"
+import { GitFork, ExternalLink, FolderGit2 } from "lucide-react"
+
 interface RepositoryBreakdownProps {
   contributions: Record<string, number>
 }
 
 export default function RepositoryBreakdown({ contributions }: RepositoryBreakdownProps) {
-  const repositories = Object.entries(contributions)
+  const repos = Object.entries(contributions)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 10) // Show top 10 repositories
+    .slice(0, 10)
 
-  if (repositories.length === 0) {
+  if (repos.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        No repository data available yet
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+        <FolderGit2 className="h-10 w-10 mb-3 text-gray-600" />
+        <p className="text-sm">No repository data yet</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      {repositories.map(([repo, count]) => (
-        <div
+    <div className="space-y-2">
+      {repos.map(([repo, count], i) => (
+        <motion.a
           key={repo}
-          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+          href={`https://github.com/${repo}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.06 }}
+          whileHover={{ x: 4 }}
+          className="group flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/20 hover:bg-white/[0.05] transition-all duration-200"
         >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-gray-400">📦</span>
-            <a
-              href={`https://github.com/${repo}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate"
-            >
+          <div className="flex items-center gap-3 min-w-0">
+            <GitFork className="h-4 w-4 text-gray-500 group-hover:text-cyan-400 transition-colors shrink-0" />
+            <span className="text-sm font-medium text-gray-300 group-hover:text-white truncate transition-colors">
               {repo}
-            </a>
+            </span>
           </div>
-          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            {count} {count === 1 ? 'contribution' : 'contributions'}
-          </span>
-        </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">
+              {count}
+            </span>
+            <ExternalLink className="h-3.5 w-3.5 text-gray-600 group-hover:text-cyan-400 transition-colors" />
+          </div>
+        </motion.a>
       ))}
     </div>
   )

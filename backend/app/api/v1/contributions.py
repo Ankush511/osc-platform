@@ -8,8 +8,9 @@ import logging
 import hmac
 import hashlib
 
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, get_current_user
 from app.services.contribution_service import ContributionService
+from app.models.user import User
 from app.schemas.contribution import (
     SubmitPRRequest,
     SubmissionResult,
@@ -34,25 +35,16 @@ def get_contribution_service(
 @router.post("/submit", response_model=SubmissionResult)
 async def submit_pull_request(
     request: SubmitPRRequest,
+    current_user: User = Depends(get_current_user),
     contribution_service: ContributionService = Depends(get_contribution_service)
 ):
     """
     Submit a pull request for validation.
-    
-    This endpoint:
-    1. Validates that the issue is claimed by the user
-    2. Verifies the PR exists and is created by the user
-    3. Checks if the PR is linked to the correct issue
-    4. Creates a contribution record
-    5. Updates issue status to completed
-    6. Awards points based on PR status
-    
-    Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6
     """
     result = await contribution_service.submit_pr(
         issue_id=request.issue_id,
         pr_url=request.pr_url,
-        user_id=request.user_id
+        user_id=current_user.id
     )
     
     if not result.success:
@@ -227,3 +219,86 @@ async def github_webhook_handler(
             return {"status": "no_action", "message": "No matching contribution found"}
     
     return {"status": "ignored", "message": "Event type not handled"}
+
+
+# ── Dev-only: simulate full PR submit + merge flow ──────────────────
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+from app.models.contribution import Contribution, ContributionStatus
+from app.models.issue import Issue, IssueStatus
+from app.services.achievement_service import AchievementService
+
+
+class DevSimulatePRRequest(BaseModel):
+    issue_id: int = Field(..., description="ID of the claimed issue")
+    simulate_merge: bool = Field(True, description="If true, immediately mark PR as merged")
+
+
+@router.post("/dev/simulate-pr")
+async def dev_simulate_pr(
+    request: DevSimulatePRRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    DEV ONLY — Simulate a PR submission and optional merge without hitting GitHub API.
+    Useful for testing the full flow: contribution → points → achievements → dashboard.
+    """
+    if settings.ENVIRONMENT not in ("development", "dev", "local"):
+        raise HTTPException(status_code=403, detail="This endpoint is only available in development")
+
+    issue = db.query(Issue).filter(Issue.id == request.issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    if issue.claimed_by != current_user.id:
+        raise HTTPException(status_code=400, detail="Issue is not claimed by you")
+
+    # Check for existing contribution
+    existing = db.query(Contribution).filter(
+        Contribution.issue_id == issue.id,
+        Contribution.user_id == current_user.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A contribution already exists for this issue")
+
+    now = datetime.now(timezone.utc)
+    is_merged = request.simulate_merge
+
+    contribution = Contribution(
+        user_id=current_user.id,
+        issue_id=issue.id,
+        pr_url=f"https://github.com/mock/repo/pull/{issue.id}",
+        pr_number=issue.id,
+        status=ContributionStatus.MERGED if is_merged else ContributionStatus.SUBMITTED,
+        submitted_at=now,
+        merged_at=now if is_merged else None,
+        points_earned=100 if is_merged else 10,
+    )
+    db.add(contribution)
+
+    issue.status = IssueStatus.COMPLETED
+
+    current_user.total_contributions += 1
+    if is_merged:
+        current_user.merged_prs += 1
+
+    db.commit()
+    db.refresh(contribution)
+
+    # Invalidate issue caches so list/detail pages show updated status
+    from app.services.cache_service import cache_service
+    cache_service.delete_pattern("issues:*")
+
+    # Check achievements
+    achievement_service = AchievementService(db)
+    newly_awarded = achievement_service.check_and_award_achievements(current_user.id)
+
+    return {
+        "success": True,
+        "contribution_id": contribution.id,
+        "status": contribution.status.value,
+        "points_earned": contribution.points_earned,
+        "is_merged": is_merged,
+        "achievements_earned": [a.name for a in newly_awarded],
+        "message": f"Simulated PR {'merged' if is_merged else 'submitted'} successfully",
+    }

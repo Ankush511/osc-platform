@@ -19,7 +19,6 @@ class SubmitPRRequest(BaseModel):
     """Request to submit a pull request"""
     issue_id: int = Field(..., description="ID of the claimed issue", gt=0)
     pr_url: str = Field(..., description="GitHub PR URL", min_length=1, max_length=500)
-    user_id: int = Field(..., description="ID of the user submitting the PR", gt=0)
     
     @field_validator('pr_url')
     @classmethod

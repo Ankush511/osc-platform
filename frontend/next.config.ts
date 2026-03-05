@@ -19,9 +19,6 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   
-  // Production optimizations
-  swcMinify: true,
-  
   // Experimental features for performance
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],

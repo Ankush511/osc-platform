@@ -6,7 +6,6 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-import redis
 
 from app.models.user import User
 from app.models.repository import Repository
@@ -24,6 +23,8 @@ from app.schemas.admin import (
 from app.services.github_service import GitHubService, GitHubAPIError
 from app.core.config import settings
 
+import boto3
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,16 +40,14 @@ class AdminService:
     - Configuration management
     """
     
-    def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, db: Session):
         """
         Initialize admin service.
         
         Args:
             db: Database session
-            redis_client: Optional Redis client for health checks
         """
         self.db = db
-        self.redis_client = redis_client
     
     def get_platform_stats(self) -> PlatformStats:
         """
@@ -393,18 +392,13 @@ class AdminService:
             raise
     
     async def check_system_health(self) -> SystemHealth:
-        """
-        Check health of all system components.
-        
-        Returns:
-            SystemHealth with status of all components
-        """
+        """Check health of all system components."""
         health_data = {
             "database": {"status": "unknown", "details": {}},
-            "redis": {"status": "unknown", "details": {}},
+            "redis": {"status": "not_used", "details": {"message": "Using in-memory cache"}},
             "github_api": {"status": "unknown", "details": {}},
             "ai_service": {"status": "unknown", "details": {}},
-            "celery": {"status": "unknown", "details": {}}
+            "celery": {"status": "not_used", "details": {"message": "Background tasks run in-process"}}
         }
         
         # Check database
@@ -418,29 +412,6 @@ class AdminService:
             health_data["database"] = {
                 "status": "unhealthy",
                 "details": {"error": str(e)}
-            }
-        
-        # Check Redis
-        if self.redis_client:
-            try:
-                self.redis_client.ping()
-                info = self.redis_client.info()
-                health_data["redis"] = {
-                    "status": "healthy",
-                    "details": {
-                        "connected_clients": info.get("connected_clients", 0),
-                        "used_memory_human": info.get("used_memory_human", "unknown")
-                    }
-                }
-            except Exception as e:
-                health_data["redis"] = {
-                    "status": "unhealthy",
-                    "details": {"error": str(e)}
-                }
-        else:
-            health_data["redis"] = {
-                "status": "unavailable",
-                "details": {"message": "Redis not configured"}
             }
         
         # Check GitHub API
@@ -463,23 +434,24 @@ class AdminService:
         finally:
             await github_service.close()
         
-        # Check AI service (OpenAI)
-        if settings.OPENAI_API_KEY:
+        # Check AI service (Bedrock)
+        try:
+            session = boto3.Session(region_name=settings.AWS_REGION)
+            bedrock = session.client("bedrock-runtime")
+            # A lightweight check — just verifying the client can be created
             health_data["ai_service"] = {
                 "status": "configured",
-                "details": {"api_key_set": True}
+                "details": {
+                    "provider": "aws_bedrock",
+                    "model": settings.BEDROCK_MODEL_ID,
+                    "region": settings.AWS_REGION,
+                }
             }
-        else:
+        except Exception as e:
             health_data["ai_service"] = {
                 "status": "unavailable",
-                "details": {"api_key_set": False}
+                "details": {"error": str(e)}
             }
-        
-        # Check Celery (basic check - would need more sophisticated monitoring)
-        health_data["celery"] = {
-            "status": "unknown",
-            "details": {"message": "Celery monitoring not implemented"}
-        }
         
         # Determine overall status
         statuses = [comp["status"] for comp in health_data.values()]
@@ -509,7 +481,7 @@ class AdminService:
         """
         return ConfigurationSettings(
             github_client_id=settings.GITHUB_CLIENT_ID,
-            openai_configured=bool(settings.OPENAI_API_KEY),
+            openai_configured=True,  # Using AWS Bedrock now
             email_enabled=settings.EMAIL_ENABLED,
             claim_timeout_easy_days=settings.CLAIM_TIMEOUT_EASY_DAYS,
             claim_timeout_medium_days=settings.CLAIM_TIMEOUT_MEDIUM_DAYS,

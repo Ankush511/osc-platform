@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 3600
     
-    # Redis
-    REDIS_URL: str
+    # Redis (optional - in-memory cache used when not available)
+    REDIS_URL: str = ""
     REDIS_MAX_CONNECTIONS: int = 50
     
     # Security
@@ -33,15 +33,18 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # GitHub OAuth
-    GITHUB_CLIENT_ID: str
-    GITHUB_CLIENT_SECRET: str
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
     GITHUB_REDIRECT_URI: Optional[str] = None
+    GITHUB_TOKEN: str = ""  # Personal access token for API calls (issue sync)
     
-    # OpenAI
-    OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4"
-    OPENAI_MAX_TOKENS: int = 2000
-    OPENAI_TEMPERATURE: float = 0.7
+    # AWS Bedrock (Claude)
+    AWS_REGION: str = "us-east-1"
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    BEDROCK_MODEL_ID: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    BEDROCK_MAX_TOKENS: int = 2000
+    BEDROCK_TEMPERATURE: float = 0.7
     
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
@@ -112,10 +115,11 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
         
         # Set Celery URLs from Redis if not explicitly set
-        if not self.CELERY_BROKER_URL:
-            self.CELERY_BROKER_URL = self.REDIS_URL
-        if not self.CELERY_RESULT_BACKEND:
-            self.CELERY_RESULT_BACKEND = self.REDIS_URL
+        if self.REDIS_URL:
+            if not self.CELERY_BROKER_URL:
+                self.CELERY_BROKER_URL = self.REDIS_URL
+            if not self.CELERY_RESULT_BACKEND:
+                self.CELERY_RESULT_BACKEND = self.REDIS_URL
             
         # Adjust settings based on environment
         if self.ENVIRONMENT == "production":

@@ -22,16 +22,25 @@ class AuthService:
     async def authenticate_github_user(self, code: str) -> TokenResponse:
         """
         Authenticate user with GitHub OAuth code and return JWT tokens
-        
-        Requirements:
-        - 1.1: GitHub OAuth authentication
-        - 1.2: Create user account with GitHub profile
-        - 1.4: Login existing user instead of creating duplicate
         """
         # Exchange code for GitHub access token
         github_token = await self._exchange_code_for_token(code)
         
         # Fetch user profile from GitHub
+        github_user_data = await self._fetch_github_user(github_token)
+        
+        # Get or create user in database
+        user = self._get_or_create_user(github_user_data)
+        
+        # Generate JWT tokens
+        return self._generate_tokens(user)
+
+    async def authenticate_with_github_token(self, github_token: str) -> TokenResponse:
+        """
+        Authenticate user with an existing GitHub access token.
+        Used when NextAuth has already completed the OAuth exchange.
+        """
+        # Fetch user profile from GitHub using the token directly
         github_user_data = await self._fetch_github_user(github_token)
         
         # Get or create user in database
@@ -139,7 +148,8 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user_id=user.id
         )
     
     def refresh_token(self, refresh_token: str) -> TokenResponse:

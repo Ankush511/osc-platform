@@ -159,6 +159,10 @@ class ContributionService:
             self.db.commit()
             self.db.refresh(contribution)
             
+            # Invalidate issue caches so list/detail pages show updated status
+            from app.services.cache_service import cache_service
+            cache_service.delete_pattern("issues:*")
+            
             # Check and award achievements
             achievement_service = AchievementService(self.db)
             newly_awarded = achievement_service.check_and_award_achievements(user_id)
@@ -256,6 +260,10 @@ class ContributionService:
                 contribution.points_earned = self.POINTS_CLOSED
             
             self.db.commit()
+            
+            # Invalidate issue caches
+            from app.services.cache_service import cache_service
+            cache_service.delete_pattern("issues:*")
             
             # Check and award achievements when PR is merged
             if merged and old_status != ContributionStatus.MERGED:

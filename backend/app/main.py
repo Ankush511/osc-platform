@@ -25,7 +25,24 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS with enhanced security
+# Add response caching middleware
+app.add_middleware(ResponseCacheMiddleware)
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware)
+
+# Add DDoS protection middleware
+if settings.ENABLE_DDOS_PROTECTION:
+    app.add_middleware(DDoSProtectionMiddleware)
+
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# Add security headers middleware
+if settings.ENABLE_SECURITY_HEADERS:
+    app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS must be the outermost middleware (added last = runs first)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -34,23 +51,6 @@ app.add_middleware(
     allow_headers=settings.CORS_ALLOW_HEADERS,
     max_age=settings.CORS_MAX_AGE,
 )
-
-# Add security headers middleware (first for all responses)
-if settings.ENABLE_SECURITY_HEADERS:
-    app.add_middleware(SecurityHeadersMiddleware)
-
-# Add request logging middleware
-app.add_middleware(RequestLoggingMiddleware)
-
-# Add DDoS protection middleware (before rate limiting)
-if settings.ENABLE_DDOS_PROTECTION:
-    app.add_middleware(DDoSProtectionMiddleware)
-
-# Add rate limiting middleware
-app.add_middleware(RateLimitMiddleware)
-
-# Add response caching middleware
-app.add_middleware(ResponseCacheMiddleware)
 
 # Register exception handlers
 app.add_exception_handler(AppException, app_exception_handler)
@@ -61,18 +61,20 @@ app.add_exception_handler(Exception, generic_exception_handler)
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
 
+
 @app.get("/")
 async def root():
     return {"message": "Open Source Contribution Platform API"}
+
 
 @app.get("/health")
 async def health_check():
     logger.info("Health check requested")
     return {"status": "healthy"}
 
+
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup."""
     logger.info(
         "Application starting",
         extra={
@@ -81,7 +83,7 @@ async def startup_event():
         }
     )
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Log application shutdown."""
     logger.info("Application shutting down")

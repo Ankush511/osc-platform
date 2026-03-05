@@ -5,10 +5,10 @@ import logging
 import time
 import json
 from typing import List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, func, String
-import redis
+from sqlalchemy import or_, and_, func, String, text
+import json
 
 from app.models.issue import Issue, IssueStatus
 from app.models.repository import Repository
@@ -23,6 +23,7 @@ from app.schemas.issue import (
     AutoReleaseResult
 )
 from app.services.github_service import GitHubService, GitHubAPIError
+from app.services.cache_service import cache_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -53,16 +54,14 @@ class IssueService:
         "beginner friendly"
     ]
     
-    def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, db: Session):
         """
         Initialize issue service.
         
         Args:
             db: Database session
-            redis_client: Optional Redis client for caching
         """
         self.db = db
-        self.redis_client = redis_client
         
     def _get_cache_key(self, key_type: str, **kwargs) -> str:
         """Generate cache key from parameters"""
@@ -70,45 +69,30 @@ class IssueService:
         return f"{self.CACHE_PREFIX}{key_type}:{params}"
     
     def _get_from_cache(self, cache_key: str) -> Optional[dict]:
-        """Get data from Redis cache"""
-        if not self.redis_client:
-            return None
-        
+        """Get data from in-memory cache"""
         try:
-            cached = self.redis_client.get(cache_key)
+            cached = cache_service.get(cache_key)
             if cached:
                 logger.debug(f"Cache hit: {cache_key}")
-                return json.loads(cached)
+                return cached
         except Exception as e:
             logger.error(f"Cache read error: {e}")
-        
         return None
     
     def _set_cache(self, cache_key: str, data: dict, ttl: int = CACHE_TTL):
-        """Set data in Redis cache"""
-        if not self.redis_client:
-            return
-        
+        """Set data in in-memory cache"""
         try:
-            self.redis_client.setex(
-                cache_key,
-                ttl,
-                json.dumps(data, default=str)
-            )
+            cache_service.set(cache_key, data, ttl)
             logger.debug(f"Cache set: {cache_key}")
         except Exception as e:
             logger.error(f"Cache write error: {e}")
     
     def _invalidate_cache_pattern(self, pattern: str):
         """Invalidate all cache keys matching pattern"""
-        if not self.redis_client:
-            return
-        
         try:
-            keys = self.redis_client.keys(f"{self.CACHE_PREFIX}{pattern}*")
-            if keys:
-                self.redis_client.delete(*keys)
-                logger.debug(f"Invalidated {len(keys)} cache keys")
+            deleted = cache_service.delete_pattern(f"{self.CACHE_PREFIX}{pattern}*")
+            if deleted:
+                logger.debug(f"Invalidated {deleted} cache keys")
         except Exception as e:
             logger.error(f"Cache invalidation error: {e}")
     
@@ -144,20 +128,32 @@ class IssueService:
             result.sync_duration_seconds = time.time() - start_time
             return result
         
-        # Initialize GitHub service (using app token or no auth for public repos)
-        github_service = GitHubService()
+        # Initialize GitHub service with token for authenticated API access
+        github_service = GitHubService(access_token=settings.GITHUB_TOKEN or None)
         
         try:
             for repo in repositories:
                 try:
                     logger.info(f"Syncing issues from {repo.full_name}")
                     
-                    # Fetch issues with beginner-friendly labels
-                    github_issues = await github_service.fetch_repository_issues(
-                        repo=repo.full_name,
-                        labels=self.BEGINNER_LABELS,
-                        state="open"
-                    )
+                    # Fetch issues for each beginner label separately
+                    # (GitHub API treats comma-separated labels as AND, we want OR)
+                    seen_ids = set()
+                    github_issues = []
+                    for label in self.BEGINNER_LABELS:
+                        try:
+                            batch = await github_service.fetch_repository_issues(
+                                repo=repo.full_name,
+                                labels=[label],
+                                state="open"
+                            )
+                            for issue in batch:
+                                if issue.id not in seen_ids:
+                                    seen_ids.add(issue.id)
+                                    github_issues.append(issue)
+                        except Exception as label_err:
+                            logger.warning(f"Failed to fetch '{label}' issues from {repo.full_name}: {label_err}")
+                            continue
                     
                     # Track existing issues for this repository
                     existing_issues = {
@@ -168,6 +164,7 @@ class IssueService:
                     }
                     
                     # Process fetched issues
+                    new_issues_batch = []
                     for gh_issue in github_issues:
                         existing_issue = existing_issues.get(gh_issue.id)
                         
@@ -177,7 +174,7 @@ class IssueService:
                             existing_issue.description = gh_issue.body
                             existing_issue.labels = [label.name for label in gh_issue.labels]
                             existing_issue.github_url = gh_issue.html_url
-                            existing_issue.updated_at = datetime.utcnow()
+                            existing_issue.updated_at = datetime.now(timezone.utc)
                             
                             # If issue was closed on GitHub, update status
                             if gh_issue.state == "closed" and existing_issue.status != IssueStatus.CLOSED:
@@ -197,11 +194,12 @@ class IssueService:
                                 description=gh_issue.body,
                                 labels=[label.name for label in gh_issue.labels],
                                 programming_language=repo.primary_language,
-                                difficulty_level=self._infer_difficulty(gh_issue.labels),
+                                difficulty_level=self._infer_difficulty(gh_issue.labels, gh_issue.body),
                                 status=IssueStatus.AVAILABLE,
                                 github_url=gh_issue.html_url
                             )
                             self.db.add(new_issue)
+                            new_issues_batch.append(new_issue)
                             result.issues_added += 1
                     
                     # Mark remaining issues as closed (they're no longer open on GitHub)
@@ -211,10 +209,15 @@ class IssueService:
                             result.issues_closed += 1
                     
                     # Update repository sync timestamp
-                    repo.last_synced = datetime.utcnow()
+                    repo.last_synced = datetime.now(timezone.utc)
                     result.repositories_synced += 1
                     
                     self.db.commit()
+                    
+                    # Collect new issue IDs (available after commit)
+                    for ni in new_issues_batch:
+                        if ni.id:
+                            result.new_issue_ids.append(ni.id)
                     
                 except GitHubAPIError as e:
                     error_msg = f"Failed to sync {repo.full_name}: {str(e)}"
@@ -244,28 +247,50 @@ class IssueService:
         
         return result
     
-    def _infer_difficulty(self, labels: List) -> str:
+    def _infer_difficulty(self, labels: List, description: Optional[str] = None) -> str:
         """
-        Infer difficulty level from issue labels.
+        Infer difficulty level from issue labels, description length, and label signals.
         
-        Args:
-            labels: List of GitHubLabel objects
-            
-        Returns:
-            Difficulty level string
+        Uses a point-based scoring system:
+          0-2  → easy
+          3-5  → medium
+          6+   → hard
         """
+        score = 0
         label_names = [label.name.lower() for label in labels]
-        
-        # Check for explicit difficulty labels
-        if any("easy" in label or "beginner" in label or "good first issue" in label for label in label_names):
+
+        # Explicit difficulty labels (strongest signal)
+        if any(k in l for l in label_names for k in ("easy", "beginner", "good first issue", "first-timers-only")):
+            score -= 1  # push toward easy
+        if any(k in l for l in label_names for k in ("medium", "intermediate")):
+            score += 3
+        if any(k in l for l in label_names for k in ("hard", "advanced", "difficult", "expert")):
+            score += 6
+
+        # Label-type signals
+        complexity_labels = ("feature", "enhancement", "refactor", "architecture", "performance", "security")
+        simple_labels = ("typo", "docs", "documentation", "chore", "style", "formatting")
+        if any(k in l for l in label_names for k in complexity_labels):
+            score += 2
+        if any(k in l for l in label_names for k in simple_labels):
+            score -= 1
+
+        # Label count: many labels often means more context / cross-cutting
+        if len(label_names) >= 5:
+            score += 1
+
+        # Description length as a complexity proxy
+        desc_len = len(description or "")
+        if desc_len > 2000:
+            score += 2
+        elif desc_len > 800:
+            score += 1
+
+        if score <= 2:
             return "easy"
-        elif any("medium" in label or "intermediate" in label for label in label_names):
+        elif score <= 5:
             return "medium"
-        elif any("hard" in label or "advanced" in label or "difficult" in label for label in label_names):
-            return "hard"
-        
-        # Default to easy for beginner-friendly labels
-        return "easy"
+        return "hard"
     
     def get_filtered_issues(
         self,
@@ -318,13 +343,15 @@ class IssueService:
             if filters.programming_languages:
                 query = query.filter(Issue.programming_language.in_(filters.programming_languages))
             
-            # Labels filter (issue must have at least one of the specified labels)
+            # Labels filter (issue must have at least one of the specified labels, case-insensitive)
             if filters.labels:
-                # Use overlap operator for PostgreSQL arrays
-                from sqlalchemy.dialects.postgresql import array
-                label_conditions = [
-                    Issue.labels.op('&&')(array([label])) for label in filters.labels
-                ]
+                # Use a raw SQL approach for case-insensitive array matching
+                label_conditions = []
+                for label in filters.labels:
+                    # Check if any element in the labels array matches (case-insensitive)
+                    label_conditions.append(
+                        text("EXISTS (SELECT 1 FROM unnest(issues.labels) AS lbl WHERE lower(lbl) = lower(:label))").bindparams(label=label)
+                    )
                 query = query.filter(or_(*label_conditions))
             
             # Difficulty filter
@@ -339,26 +366,32 @@ class IssueService:
             if filters.repository_id:
                 query = query.filter(Issue.repository_id == filters.repository_id)
             
-            # Text search in title and description
+            # Text search in title, description, labels, language, and difficulty
             if filters.search_query:
                 search_term = f"%{filters.search_query}%"
                 query = query.filter(
                     or_(
                         Issue.title.ilike(search_term),
-                        Issue.description.ilike(search_term)
+                        Issue.description.ilike(search_term),
+                        Issue.programming_language.ilike(search_term),
+                        Issue.difficulty_level.ilike(search_term),
+                        # Search within the labels array (case-insensitive)
+                        text(
+                            "EXISTS (SELECT 1 FROM unnest(issues.labels) AS lbl WHERE lower(lbl) LIKE lower(:search))"
+                        ).bindparams(search=search_term),
                     )
                 )
         
         # Get total count before pagination
         total = query.count()
         
+        # Order by created_at descending (newest first)
+        query = query.order_by(Issue.created_at.desc())
+        
         # Apply pagination
         if pagination:
             offset = (pagination.page - 1) * pagination.page_size
             query = query.offset(offset).limit(pagination.page_size)
-        
-        # Order by created_at descending (newest first)
-        query = query.order_by(Issue.created_at.desc())
         
         issues = query.all()
         
@@ -506,7 +539,7 @@ class IssueService:
             
             # Calculate claim expiration based on difficulty
             timeout_days = self._get_timeout_for_difficulty(issue.difficulty_level)
-            claimed_at = datetime.utcnow()
+            claimed_at = datetime.now(timezone.utc)
             claim_expires_at = claimed_at + timedelta(days=timeout_days)
             
             # Update issue
@@ -560,69 +593,49 @@ class IssueService:
         
         return difficulty_map.get(difficulty_level.lower(), settings.CLAIM_TIMEOUT_EASY_DAYS)
     
-    def release_issue(self, issue_id: int, user_id: int, force: bool = False) -> ReleaseResult:
+    def release_issue(self, issue_id: int, user_id: int, force: bool = False, reason: Optional[str] = None) -> ReleaseResult:
         """
         Release a claimed issue.
-        
+
         Args:
             issue_id: ID of the issue to release
             user_id: ID of the user releasing the issue
             force: If True, allows admin to release any issue
-            
+            reason: Optional reason for releasing
+
         Returns:
             ReleaseResult with success status and details
         """
         try:
-            # Get the issue
             issue = self.db.query(Issue).filter(Issue.id == issue_id).first()
-            
+
             if not issue:
-                return ReleaseResult(
-                    success=False,
-                    message="Issue not found"
-                )
-            
-            # Check if issue is claimed
+                return ReleaseResult(success=False, message="Issue not found")
+
             if issue.status != IssueStatus.CLAIMED:
-                return ReleaseResult(
-                    success=False,
-                    message=f"Issue is not claimed (status: {issue.status.value})"
-                )
-            
-            # Verify user owns the claim (unless force)
+                return ReleaseResult(success=False, message=f"Issue is not claimed (status: {issue.status.value})")
+
             if not force and issue.claimed_by != user_id:
-                return ReleaseResult(
-                    success=False,
-                    message="You can only release issues you have claimed"
-                )
-            
-            # Release the issue
+                return ReleaseResult(success=False, message="You can only release issues you have claimed")
+
             issue.status = IssueStatus.AVAILABLE
             issue.claimed_by = None
             issue.claimed_at = None
             issue.claim_expires_at = None
-            
+
             self.db.commit()
             self.db.refresh(issue)
-            
-            # Invalidate caches
+
             self._invalidate_cache_pattern("")
-            
-            logger.info(f"Issue {issue_id} released by user {user_id}")
-            
-            return ReleaseResult(
-                success=True,
-                message="Issue released successfully",
-                issue_id=issue_id
-            )
-            
+
+            logger.info(f"Issue {issue_id} released by user {user_id}, reason: {reason or 'not specified'}")
+
+            return ReleaseResult(success=True, message="Issue released successfully", issue_id=issue_id)
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Error releasing issue {issue_id}: {str(e)}")
-            return ReleaseResult(
-                success=False,
-                message=f"Failed to release issue: {str(e)}"
-            )
+            return ReleaseResult(success=False, message=f"Failed to release issue: {str(e)}")
     
     def extend_claim_deadline(
         self,
@@ -667,7 +680,7 @@ class IssueService:
                 )
             
             # Check if claim has already expired
-            if issue.claim_expires_at and issue.claim_expires_at < datetime.utcnow():
+            if issue.claim_expires_at and issue.claim_expires_at < datetime.now(timezone.utc):
                 return ExtensionResult(
                     success=False,
                     message="Cannot extend expired claim. Please claim the issue again."
@@ -678,7 +691,7 @@ class IssueService:
                 new_expiration = issue.claim_expires_at + timedelta(days=extension_days)
             else:
                 # Fallback if no expiration set
-                new_expiration = datetime.utcnow() + timedelta(days=extension_days)
+                new_expiration = datetime.now(timezone.utc) + timedelta(days=extension_days)
             
             issue.claim_expires_at = new_expiration
             
@@ -723,7 +736,7 @@ class IssueService:
         
         try:
             # Find all claimed issues with expired deadlines
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             expired_issues = self.db.query(Issue).filter(
                 Issue.status == IssueStatus.CLAIMED,
                 Issue.claim_expires_at.isnot(None),
@@ -788,7 +801,7 @@ class IssueService:
             List of issues expiring soon
         """
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             threshold_time = now + timedelta(hours=hours_threshold)
             
             expiring_issues = self.db.query(Issue).filter(

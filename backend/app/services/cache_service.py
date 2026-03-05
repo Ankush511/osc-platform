@@ -1,264 +1,139 @@
 """
-Redis caching service for frequently accessed data.
+In-memory caching service with TTL support.
+Replaces Redis for local development and Supabase-based deployments.
 """
 import json
-import redis
+import time
+import threading
 from typing import Optional, Any, List
-from datetime import timedelta
-from app.core.config import settings
 
 
-class CacheService:
-    """Service for managing Redis cache operations."""
-    
+class InMemoryCache:
+    """Thread-safe in-memory cache with TTL support."""
+
     def __init__(self):
-        """Initialize Redis connection."""
-        self.redis_client = redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=5,
-            socket_timeout=5
-        )
-    
-    def get(self, key: str) -> Optional[Any]:
-        """
-        Get value from cache.
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            Cached value or None if not found
-        """
-        try:
-            value = self.redis_client.get(key)
-            if value:
-                return json.loads(value)
-            return None
-        except (redis.RedisError, json.JSONDecodeError):
-            return None
-    
-    def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: Optional[int] = None
-    ) -> bool:
-        """
-        Set value in cache with optional TTL.
-        
-        Args:
-            key: Cache key
-            value: Value to cache
-            ttl: Time to live in seconds
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            serialized = json.dumps(value)
-            if ttl:
-                return self.redis_client.setex(key, ttl, serialized)
-            return self.redis_client.set(key, serialized)
-        except (redis.RedisError, TypeError):
-            return False
-    
-    def delete(self, key: str) -> bool:
-        """
-        Delete key from cache.
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            return bool(self.redis_client.delete(key))
-        except redis.RedisError:
-            return False
-    
-    def delete_pattern(self, pattern: str) -> int:
-        """
-        Delete all keys matching pattern.
-        
-        Args:
-            pattern: Key pattern (e.g., "user:*")
-            
-        Returns:
-            Number of keys deleted
-        """
-        try:
-            keys = self.redis_client.keys(pattern)
-            if keys:
-                return self.redis_client.delete(*keys)
-            return 0
-        except redis.RedisError:
-            return 0
-    
-    def exists(self, key: str) -> bool:
-        """
-        Check if key exists in cache.
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            True if key exists, False otherwise
-        """
-        try:
-            return bool(self.redis_client.exists(key))
-        except redis.RedisError:
-            return False
-    
-    def get_many(self, keys: List[str]) -> List[Optional[Any]]:
-        """
-        Get multiple values from cache.
-        
-        Args:
-            keys: List of cache keys
-            
-        Returns:
-            List of cached values (None for missing keys)
-        """
-        try:
-            values = self.redis_client.mget(keys)
-            return [json.loads(v) if v else None for v in values]
-        except (redis.RedisError, json.JSONDecodeError):
-            return [None] * len(keys)
-    
-    def set_many(
-        self,
-        mapping: dict,
-        ttl: Optional[int] = None
-    ) -> bool:
-        """
-        Set multiple key-value pairs in cache.
-        
-        Args:
-            mapping: Dictionary of key-value pairs
-            ttl: Time to live in seconds
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            serialized = {k: json.dumps(v) for k, v in mapping.items()}
-            pipeline = self.redis_client.pipeline()
-            pipeline.mset(serialized)
-            if ttl:
-                for key in serialized.keys():
-                    pipeline.expire(key, ttl)
-            pipeline.execute()
+        self._store: dict = {}
+        self._expiry: dict = {}
+        self._lock = threading.Lock()
+
+    def _is_expired(self, key: str) -> bool:
+        if key in self._expiry and self._expiry[key] < time.time():
+            del self._store[key]
+            del self._expiry[key]
             return True
-        except (redis.RedisError, TypeError):
-            return False
-    
+        return False
+
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key not in self._store or self._is_expired(key):
+                return None
+            return self._store[key]
+
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+        with self._lock:
+            self._store[key] = value
+            if ttl:
+                self._expiry[key] = time.time() + ttl
+            elif key in self._expiry:
+                del self._expiry[key]
+            return True
+
+    def delete(self, key: str) -> bool:
+        with self._lock:
+            removed = key in self._store
+            self._store.pop(key, None)
+            self._expiry.pop(key, None)
+            return removed
+
+    def delete_pattern(self, pattern: str) -> int:
+        """Delete keys matching a simple prefix pattern (supports trailing *)."""
+        prefix = pattern.rstrip("*")
+        with self._lock:
+            keys_to_delete = [k for k in self._store if k.startswith(prefix)]
+            for k in keys_to_delete:
+                self._store.pop(k, None)
+                self._expiry.pop(k, None)
+            return len(keys_to_delete)
+
+    def exists(self, key: str) -> bool:
+        with self._lock:
+            if key not in self._store or self._is_expired(key):
+                return False
+            return True
+
+    def get_many(self, keys: List[str]) -> List[Optional[Any]]:
+        return [self.get(k) for k in keys]
+
+    def set_many(self, mapping: dict, ttl: Optional[int] = None) -> bool:
+        for k, v in mapping.items():
+            self.set(k, v, ttl)
+        return True
+
     def increment(self, key: str, amount: int = 1) -> Optional[int]:
-        """
-        Increment a counter in cache.
-        
-        Args:
-            key: Cache key
-            amount: Amount to increment by
-            
-        Returns:
-            New value or None if error
-        """
-        try:
-            return self.redis_client.incrby(key, amount)
-        except redis.RedisError:
-            return None
-    
-    def get_ttl(self, key: str) -> Optional[int]:
-        """
-        Get remaining TTL for a key.
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            TTL in seconds or None if key doesn't exist
-        """
-        try:
-            ttl = self.redis_client.ttl(key)
-            return ttl if ttl >= 0 else None
-        except redis.RedisError:
-            return None
-    
+        with self._lock:
+            if key not in self._store or self._is_expired(key):
+                self._store[key] = amount
+                return amount
+            self._store[key] = (self._store[key] or 0) + amount
+            return self._store[key]
+
     def ttl(self, key: str) -> int:
-        """
-        Get remaining TTL for a key (alias for get_ttl).
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            TTL in seconds or -1 if key doesn't exist
-        """
-        try:
-            return self.redis_client.ttl(key)
-        except redis.RedisError:
-            return -1
+        with self._lock:
+            if key not in self._expiry:
+                return -1
+            remaining = int(self._expiry[key] - time.time())
+            return max(remaining, 0)
+
+    def get_ttl(self, key: str) -> Optional[int]:
+        val = self.ttl(key)
+        return val if val >= 0 else None
 
 
-# Cache key generators
 class CacheKeys:
     """Cache key generators for consistent naming."""
-    
+
     @staticmethod
     def user_stats(user_id: int) -> str:
-        """Generate cache key for user statistics."""
         return f"user:stats:{user_id}"
-    
+
     @staticmethod
     def user_profile(user_id: int) -> str:
-        """Generate cache key for user profile."""
         return f"user:profile:{user_id}"
-    
+
     @staticmethod
     def issue_list(filters_hash: str) -> str:
-        """Generate cache key for filtered issue list."""
         return f"issues:list:{filters_hash}"
-    
+
     @staticmethod
     def issue_detail(issue_id: int) -> str:
-        """Generate cache key for issue details."""
         return f"issue:detail:{issue_id}"
-    
+
     @staticmethod
     def repository_info(repo_id: int) -> str:
-        """Generate cache key for repository information."""
         return f"repo:info:{repo_id}"
-    
+
     @staticmethod
     def ai_explanation(content_hash: str) -> str:
-        """Generate cache key for AI explanations."""
         return f"ai:explanation:{content_hash}"
-    
+
     @staticmethod
     def user_achievements(user_id: int) -> str:
-        """Generate cache key for user achievements."""
         return f"user:achievements:{user_id}"
-    
+
     @staticmethod
     def contribution_timeline(user_id: int) -> str:
-        """Generate cache key for contribution timeline."""
         return f"user:timeline:{user_id}"
 
 
-# Cache TTL constants (in seconds)
 class CacheTTL:
-    """Cache TTL values for different data types."""
-    
+    """Cache TTL values in seconds."""
     MINUTE = 60
     FIVE_MINUTES = 300
     FIFTEEN_MINUTES = 900
     HOUR = 3600
     DAY = 86400
     WEEK = 604800
-    
-    # Specific TTLs
+
     USER_STATS = FIFTEEN_MINUTES
     USER_PROFILE = HOUR
     ISSUE_LIST = FIVE_MINUTES
@@ -270,4 +145,4 @@ class CacheTTL:
 
 
 # Global cache service instance
-cache_service = CacheService()
+cache_service = InMemoryCache()

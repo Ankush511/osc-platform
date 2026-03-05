@@ -16,17 +16,17 @@ async def github_callback(
     db: Session = Depends(get_db)
 ):
     """
-    GitHub OAuth callback endpoint
-    
-    Exchanges OAuth code for JWT tokens and creates/updates user account
-    
-    Requirements:
-    - 1.1: GitHub OAuth authentication
-    - 1.2: Create user account with GitHub profile
-    - 1.4: Login existing user instead of duplicate
+    GitHub OAuth callback endpoint.
+    Accepts either an OAuth code or a GitHub access token.
     """
     auth_service = AuthService(db)
-    return await auth_service.authenticate_github_user(request.code)
+    
+    # Try using it as a GitHub access token first (from NextAuth)
+    # If that fails, try exchanging it as an OAuth code
+    try:
+        return await auth_service.authenticate_with_github_token(request.code)
+    except Exception:
+        return await auth_service.authenticate_github_user(request.code)
 
 
 @router.post("/refresh", response_model=TokenResponse)

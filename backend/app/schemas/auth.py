@@ -44,6 +44,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=1800, description="Token expiration in seconds")
+    user_id: Optional[int] = Field(None, description="Authenticated user ID")
 
 
 class TokenRefreshRequest(BaseModel):

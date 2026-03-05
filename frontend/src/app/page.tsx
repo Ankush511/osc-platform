@@ -14,7 +14,7 @@ import {
   Target,
   ChevronDown,
   Terminal,
-  UserPlus,
+  User,
 } from "lucide-react";
 
 const AuthNavButton = dynamic(() => import("@/components/AuthNavButton").then(m => m.AuthNavButton), { ssr: false, loading: () => <div className="w-[120px] h-[40px] rounded-xl bg-white/5 animate-pulse" /> });
@@ -31,7 +31,7 @@ import {
   RESOURCE_LINKS,
 } from "./constants";
 
-// ─── Typing IDE Component ───────────────────────────────────────────────────
+/* ─── Typing IDE Component ─────────────────────────────────────────────────── */
 function TypingIDE() {
   const [displayedText, setDisplayedText] = useState("");
   const [lineIndex, setLineIndex] = useState(0);
@@ -101,7 +101,7 @@ function TypingIDE() {
   );
 }
 
-// ─── User Signup Toast ──────────────────────────────────────────────────────
+/* ─── User Signup Toast ────────────────────────────────────────────────────── */
 interface ToastData {
   id: number;
   name: string;
@@ -155,7 +155,7 @@ function SignupToasts() {
               <p className="text-white text-sm font-semibold truncate">{toast.name} just signed up</p>
               <p className="text-gray-400 text-xs">a few seconds ago</p>
             </div>
-            <UserPlus className="h-4 w-4 text-cyan-400 shrink-0" />
+            <User className="h-6 w-6 text-cyan-400 shrink-0" />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -163,14 +163,14 @@ function SignupToasts() {
   );
 }
 
-// ─── Floating Particles ─────────────────────────────────────────────────────
+/* ─── Floating Particles ───────────────────────────────────────────────────── */
 function FloatingParticles() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return <div className="absolute inset-0 overflow-hidden pointer-events-none" />;
 
-  // Generate stable random values only on the client to avoid hydration mismatch
+  /* Generate stable random values only on the client to avoid hydration mismatch */
   const particles = Array.from({ length: 20 }).map((_, i) => ({
     id: i,
     ix: `${Math.random() * 100}%`,
@@ -196,7 +196,87 @@ function FloatingParticles() {
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────
+/* ─── Constellation Network ────────────────────────────────────────────────── */
+function ConstellationNetwork() {
+  const [mounted, setMounted] = useState(false);
+  const dataRef = useRef<{ nodes: any[]; edges: { from: number; to: number }[] } | null>(null);
+
+  useEffect(() => {
+    if (!dataRef.current) {
+      const nodes = Array.from({ length: 15 }).map((_, i) => ({
+        id: i,
+        cx: 50 + Math.random() * 900,
+        cy: 50 + Math.random() * 900,
+        ax1: 50 + Math.random() * 900,
+        ay1: 50 + Math.random() * 900,
+        ax2: 50 + Math.random() * 900,
+        ay2: 50 + Math.random() * 900,
+        dur: 20 + Math.random() * 25,
+        del: Math.random() * 10,
+        r: 2.5 + Math.random() * 3,
+      }));
+
+      const edges: { from: number; to: number }[] = [];
+      for (let i = 0; i < nodes.length; i++) {
+        const connections = 1 + Math.floor(Math.random() * 2);
+        for (let c = 0; c < connections; c++) {
+          const to = (i + 1 + Math.floor(Math.random() * 4)) % nodes.length;
+          if (to !== i) edges.push({ from: i, to });
+        }
+      }
+      dataRef.current = { nodes, edges };
+    }
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !dataRef.current) return null;
+
+  const { nodes, edges } = dataRef.current;
+
+  return (
+    <svg className="absolute inset-0 w-full h-full opacity-50" viewBox="0 0 1000 1000" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      {edges.map((edge, i) => {
+        const a = nodes[edge.from];
+        const b = nodes[edge.to];
+        return (
+          <motion.line
+            key={`e-${i}`}
+            x1={a.cx} y1={a.cy}
+            x2={b.cx} y2={b.cy}
+            stroke="url(#constellationGrad)"
+            strokeWidth="1.5"
+            initial={{ pathLength: 0, opacity: 0.3 }}
+            animate={{ pathLength: 1, opacity: [0.3, 0.8, 0.5, 0.8, 0.3] }}
+            transition={{ duration: a.dur, repeat: Infinity, delay: a.del, ease: "linear" }}
+          />
+        );
+      })}
+      {nodes.map((n) => (
+        <motion.circle
+          key={`n-${n.id}`}
+          cx={n.cx} cy={n.cy}
+          r={n.r}
+          fill="rgb(6, 182, 212)"
+          initial={{ cx: n.cx, cy: n.cy, opacity: 0.4 }}
+          animate={{
+            cx: [n.cx, n.ax1, n.ax2, n.cx],
+            cy: [n.cy, n.ay1, n.ay2, n.cy],
+            opacity: [0.4, 1, 0.6, 1, 0.4],
+          }}
+          transition={{ duration: n.dur, repeat: Infinity, delay: n.del, ease: "linear" }}
+        />
+      ))}
+      <defs>
+        <linearGradient id="constellationGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="rgb(6, 182, 212)" />
+          <stop offset="100%" stopColor="rgb(59, 130, 246)" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/* ─── Main Page ────────────────────────────────────────────────────────────── */
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -234,6 +314,11 @@ export default function Home() {
             background: `radial-gradient(600px circle at ${mouseX}px ${mouseY}px, rgba(6, 182, 212, 0.15), transparent 40%)`,
           }}
         />
+      </div>
+
+      {/* Constellation Network — own layer above grid */}
+      <div className="fixed inset-0 z-[1] pointer-events-none">
+        <ConstellationNetwork />
       </div>
 
       {/* Navigation */}
@@ -289,7 +374,7 @@ export default function Home() {
           >
             <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
             <span className="text-sm text-cyan-300 font-medium">
-              Join 4,000+ developers contributing to open source
+              Join 1,000+ developers contributing to open source
             </span>
           </motion.div>
 
@@ -567,7 +652,7 @@ export default function Home() {
               </h2>
 
               <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
-                Join thousands of developers contributing to open source. Sign in with GitHub and discover your perfect first issue in minutes.
+                Join 1,000+ developers contributing to open source. Sign in with GitHub and discover your perfect first issue in minutes.
               </p>
 
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="inline-block">
@@ -627,7 +712,7 @@ export default function Home() {
             </div>
 
             <div>
-              <h3 className="text-white font-bold mb-6">Resources</h3>
+              <h3 className="text-white font-bold mb-6">Company</h3>
               <ul className="space-y-3">
                 {RESOURCE_LINKS.map((item) => (
                   <li key={item.name}>

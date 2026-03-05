@@ -68,7 +68,7 @@ export default function ContributionTimeline({ contributions }: ContributionTime
             No {filter} contributions
           </motion.p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
             {filtered.map((c, i) => {
               const cfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.closed
               const Icon = cfg.icon

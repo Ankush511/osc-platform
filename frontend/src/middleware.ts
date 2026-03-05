@@ -4,7 +4,8 @@ import { NextResponse } from "next/server"
 export default auth((req) => {
   const isAuthenticated = !!req.auth
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth')
-  const isPublicPage = req.nextUrl.pathname === '/' || isAuthPage
+  const publicPaths = ['/', '/about', '/vision', '/mission', '/community', '/leaderboard', '/achievements', '/privacy', '/terms', '/issues']
+  const isPublicPage = publicPaths.includes(req.nextUrl.pathname) || isAuthPage
 
   // Redirect authenticated users away from auth pages
   if (isAuthenticated && isAuthPage) {

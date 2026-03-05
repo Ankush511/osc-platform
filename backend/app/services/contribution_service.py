@@ -162,6 +162,8 @@ class ContributionService:
             # Invalidate issue caches so list/detail pages show updated status
             from app.services.cache_service import cache_service
             cache_service.delete_pattern("issues:*")
+            cache_service.delete_pattern("api:response:*")
+            cache_service.delete_pattern("user:*")
             
             # Check and award achievements
             achievement_service = AchievementService(self.db)
@@ -264,6 +266,8 @@ class ContributionService:
             # Invalidate issue caches
             from app.services.cache_service import cache_service
             cache_service.delete_pattern("issues:*")
+            cache_service.delete_pattern("api:response:*")
+            cache_service.delete_pattern("user:*")
             
             # Check and award achievements when PR is merged
             if merged and old_status != ContributionStatus.MERGED:

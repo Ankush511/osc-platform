@@ -1,5 +1,7 @@
 import { auth, signOut } from "@/auth"
 import { redirect } from "next/navigation"
+
+export const dynamic = 'force-dynamic'
 import Link from "next/link"
 import { LogoIcon } from "@/components/ui/Logo"
 import { ArrowLeft, LogOut, Settings, User, Target, Sparkles, GitPullRequest, Trophy, BarChart3 } from "lucide-react"
@@ -132,7 +134,7 @@ export default async function DashboardPage() {
           <StatsCard title="Total Contributions" value={statistics.total_contributions} iconName="BarChart3" description="All time" index={0} />
           <StatsCard title="PRs Submitted" value={statistics.total_prs_submitted} iconName="GitPullRequest" description="Pending and merged" index={1} />
           <StatsCard title="PRs Merged" value={statistics.merged_prs} iconName="GitMerge" description="Successfully merged" index={2} />
-          <StatsCard title="Achievements" value={`${achievement_stats.unlocked_achievements}/${achievement_stats.total_achievements}`} iconName="Trophy" description={`${achievement_stats.completion_percentage.toFixed(0)}% complete`} index={3} />
+          <StatsCard title="Achievements" value={`${achievement_stats.unlocked_achievements}/${achievement_stats.total_achievements}`} iconName="Trophy" description="Unlocked" index={3} />
         </div>
 
         {/* Content Grid */}

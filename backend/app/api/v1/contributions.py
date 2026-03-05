@@ -288,6 +288,8 @@ async def dev_simulate_pr(
     # Invalidate issue caches so list/detail pages show updated status
     from app.services.cache_service import cache_service
     cache_service.delete_pattern("issues:*")
+    cache_service.delete_pattern("api:response:*")
+    cache_service.delete_pattern("user:*")
 
     # Check achievements
     achievement_service = AchievementService(db)

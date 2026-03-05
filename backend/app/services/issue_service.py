@@ -88,9 +88,11 @@ class IssueService:
             logger.error(f"Cache write error: {e}")
     
     def _invalidate_cache_pattern(self, pattern: str):
-        """Invalidate all cache keys matching pattern"""
+        """Invalidate all cache keys matching pattern, including response cache"""
         try:
             deleted = cache_service.delete_pattern(f"{self.CACHE_PREFIX}{pattern}*")
+            # Also invalidate the middleware response cache for issue-related routes
+            deleted += cache_service.delete_pattern("api:response:*")
             if deleted:
                 logger.debug(f"Invalidated {deleted} cache keys")
         except Exception as e:

@@ -60,9 +60,9 @@ export const IDE_LINES = [
 
 // ─── Stats ──────────────────────────────────────────────────────────────────
 export const STATS: Stat[] = [
-  { value: "4K+", label: "Active Contributors", icon: Users },
-  { value: "2K+", label: "Issues Resolved", icon: CheckCircle2 },
-  { value: "500+", label: "Open Source Projects", icon: Star },
+  { value: "1.2K+", label: "Active Contributors", icon: Users },
+  { value: "3000+", label: "Open Issues", icon: CheckCircle2 },
+  { value: "300+", label: "Open Source Projects", icon: Star },
 ];
 
 // ─── Features ───────────────────────────────────────────────────────────────
@@ -188,10 +188,10 @@ export const PLATFORM_LINKS = [
 ];
 
 export const RESOURCE_LINKS = [
-  { name: "Documentation", href: "/docs" },
-  { name: "API", href: "/api/docs" },
+  { name: "About Us", href: "/about" },
+  { name: "Our Vision", href: "/vision" },
+  { name: "Our Mission", href: "/mission" },
   { name: "Community", href: "/community" },
-  { name: "Blog", href: "/blog" },
 ];
 
 // ─── Nav Links ──────────────────────────────────────────────────────────────

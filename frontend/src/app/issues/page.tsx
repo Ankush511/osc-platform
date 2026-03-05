@@ -1,8 +1,8 @@
 import { auth } from "@/auth"
 import IssueDiscoveryClient from "@/components/issues/IssueDiscoveryClient"
 import Link from "next/link"
-import { LogoWithGlow, LogoIcon } from "@/components/ui/Logo"
-import { Target, ArrowLeft, User } from "lucide-react"
+import { LogoIcon } from "@/components/ui/Logo"
+import { Target, User } from "lucide-react"
 
 export const dynamic = 'force-dynamic'
 
@@ -42,22 +42,16 @@ export default async function IssuesPage() {
             </Link>
             <div className="flex items-center gap-3">
               {isSignedIn ? (
-                <>
-                  <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors flex items-center gap-1">
-                    <ArrowLeft className="h-4 w-4" />
-                    Dashboard
-                  </Link>
-                  <Link href="/dashboard" className="flex items-center gap-2 pl-3 border-l border-white/10">
-                    {session.user?.image ? (
-                      <img src={session.user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-cyan-500/30" />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                        <User className="h-4 w-4 text-white" />
-                      </div>
-                    )}
-                    <span className="hidden sm:block text-sm font-medium text-gray-300">{session.user?.name}</span>
-                  </Link>
-                </>
+                <Link href="/dashboard" className="flex items-center gap-2">
+                  {session.user?.image ? (
+                    <img src={session.user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-cyan-500/30" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                  )}
+                  <span className="hidden sm:block text-sm font-medium text-gray-300">{session.user?.name}</span>
+                </Link>
               ) : (
                 <Link href="/auth/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all">
                   <Target className="h-4 w-4" />

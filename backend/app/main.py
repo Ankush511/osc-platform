@@ -82,6 +82,18 @@ async def startup_event():
             "version": "1.0.0",
         }
     )
+    # Seed achievement definitions if not already present
+    try:
+        from app.db.base import SessionLocal
+        from app.services.achievement_service import AchievementService
+        db = SessionLocal()
+        service = AchievementService(db)
+        created = service.initialize_achievements()
+        if created:
+            logger.info(f"Initialized {len(created)} achievements")
+        db.close()
+    except Exception as e:
+        logger.warning(f"Failed to initialize achievements: {e}")
 
 
 @app.on_event("shutdown")

@@ -22,7 +22,7 @@ export default function RepositoryBreakdown({ contributions }: RepositoryBreakdo
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
       {repos.map(([repo, count], i) => (
         <motion.a
           key={repo}

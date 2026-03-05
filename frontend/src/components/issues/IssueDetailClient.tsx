@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useRouter } from "next/navigation"
 import {
   Sparkles, GitFork, ExternalLink, Tag, Clock, Rocket,
   BookOpen, GraduationCap, AlertTriangle, Undo2,
@@ -13,6 +12,7 @@ import { Issue } from "@/types/issue"
 import { IssueExplanationResponse } from "@/types/ai"
 import { claimIssue, releaseIssue, extendClaimDeadline, submitPullRequest, simulatePR } from "@/lib/issues-api"
 import { fetchIssueExplanation } from "@/lib/ai-api"
+import PRCelebration from "@/components/issues/PRCelebration"
 import Markdown from "@/components/ui/Markdown"
 
 const DIFF: Record<string, { cls: string; label: string }> = {
@@ -41,7 +41,6 @@ interface Props {
 }
 
 export default function IssueDetailClient({ issue: initialIssue, accessToken, currentUserId: initialUserId }: Props) {
-  const router = useRouter()
   const [issue, setIssue] = useState(initialIssue)
   const [userId, setUserId] = useState(initialUserId)
   const [loading, setLoading] = useState(false)
@@ -84,18 +83,19 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
     try { await fn() } catch (e: unknown) { setError(e instanceof Error ? e.message : "Something went wrong") }
     finally { setLoading(false) }
   }
-  const handleClaim = () => act(async () => {
+  const handleSolveIt = () => {
+    setError(null)
+    setShowAgreement(true)
+  }
+  const handleAcceptAgreement = () => act(async () => {
     const r = await claimIssue(issue.id, accessToken)
     if (r.success) {
       setIssue({ ...issue, status: "claimed", claimed_by: userId, claimed_at: r.claimed_at || new Date().toISOString(), claim_expires_at: r.claim_expires_at || null })
-      setShowAgreement(true)
+      setShowAgreement(false)
+      setAgreedTerms(false)
+      window.open(issue.github_url, "_blank")
     }
   })
-  const handleAcceptAgreement = () => {
-    setShowAgreement(false)
-    setAgreedTerms(false)
-    window.open(issue.github_url, "_blank")
-  }
   const handleRelease = () => act(async () => {
     const r = await releaseIssue(issue.id, accessToken, releaseReason || undefined)
     if (r.success) { setIssue({ ...issue, status: "available", claimed_by: null, claimed_at: null, claim_expires_at: null }); setShowRelease(false); setReleaseReason("") }
@@ -109,6 +109,8 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
   const handleSubmitPR = () => act(async () => {
     if (!prUrl.trim()) { setError("Please enter a PR URL"); return }
     const r = await submitPullRequest(issue.id, prUrl.trim(), accessToken)
+    setShowSubmitPR(false)
+    setPrUrl("")
     setPrSubmitted(true)
     setPrResult({ points_earned: r.points_earned, pr_number: r.pr_number })
     setIssue({ ...issue, status: "completed" })
@@ -116,10 +118,11 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
   })
   const handleSimulatePR = (merge: boolean) => act(async () => {
     const r = await simulatePR(issue.id, merge, accessToken)
+    setShowSubmitPR(false)
+    setPrUrl("")
     setPrSubmitted(true)
     setPrResult({ points_earned: r.points_earned, pr_number: r.contribution_id, achievements: r.achievements_earned })
     setIssue({ ...issue, status: "completed" })
-    setShowSubmitPR(true)
     setError(null)
   })
   const handleGenerateAI = async () => {
@@ -166,7 +169,7 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
             )}
             <div className="flex flex-wrap gap-2 pt-3 border-t border-white/5">
               {issue.status === "available" && (
-                <button onClick={handleClaim} disabled={loading}
+                <button onClick={handleSolveIt} disabled={loading}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 transition-all shadow-lg shadow-cyan-500/20">
                   <Rocket className="h-4 w-4" /> Solve It
                 </button>
@@ -243,7 +246,31 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
               <div className="flex justify-between"><span className="text-gray-500">Repo</span><span className="text-cyan-400 text-xs truncate ml-2">{issue.repository_full_name}</span></div>
             </div>
           </motion.div>
-          <button onClick={() => router.push("/issues")} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-sm font-medium hover:bg-white/10 hover:text-white transition-all text-center">← Back to Issues</button>
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+            className="bg-gradient-to-br from-purple-500/[0.06] to-cyan-500/[0.03] backdrop-blur-sm border border-purple-500/15 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-purple-400" />
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Quick Tips</h4>
+            </div>
+            <ul className="space-y-2 text-xs text-gray-400 leading-relaxed">
+              <li className="flex items-start gap-2">
+                <span className="text-cyan-400 mt-0.5">•</span>
+                <span>Read the repo's contributing guide before starting</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-cyan-400 mt-0.5">•</span>
+                <span>Fork the repo and create a feature branch</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-cyan-400 mt-0.5">•</span>
+                <span>Use the AI summary below for a beginner-friendly breakdown</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-cyan-400 mt-0.5">•</span>
+                <span>Ask questions on the issue thread if anything is unclear</span>
+              </li>
+            </ul>
+          </motion.div>
         </div>
       </div>
 
@@ -479,35 +506,8 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               className="bg-[#0d1117] border border-white/10 rounded-2xl p-6 max-w-lg w-full">
 
-              {/* Success state */}
-              {prSubmitted ? (
-                <div className="text-center py-4">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 mb-4">
-                    <CheckCircle2 className="h-7 w-7 text-emerald-400" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white mb-1">PR Submitted</h3>
-                  <p className="text-sm text-gray-400 mb-1">
-                    Pull request #{prResult?.pr_number} has been recorded.
-                  </p>
-                  {prResult?.points_earned ? (
-                    <p className="text-sm text-cyan-400 font-medium">+{prResult.points_earned} points earned</p>
-                  ) : null}
-                  {prResult?.achievements && prResult.achievements.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      <p className="text-xs text-gray-500">New achievements unlocked:</p>
-                      {prResult.achievements.map(a => (
-                        <span key={a} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/20 mr-1">
-                          🏆 {a}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <button onClick={() => { setShowSubmitPR(false); setPrSubmitted(false); setPrUrl(""); setPrResult(null) }}
-                    className="mt-5 px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm font-medium hover:bg-white/10 transition-all">
-                    Close
-                  </button>
-                </div>
-              ) : (
+              {/* Form */}
+              {!prSubmitted && (
                 <>
                   <div className="flex items-center gap-3 mb-5">
                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20">
@@ -636,13 +636,22 @@ export default function IssueDetailClient({ issue: initialIssue, accessToken, cu
                 </button>
                 <button onClick={() => { setShowAgreement(false); setAgreedTerms(false) }}
                   className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm font-medium hover:bg-white/10 transition-all">
-                  Later
+                  Close
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PR Celebration Overlay */}
+      <PRCelebration
+        show={prSubmitted}
+        pointsEarned={prResult?.points_earned || 0}
+        prNumber={prResult?.pr_number}
+        achievements={prResult?.achievements}
+        onClose={() => { setPrSubmitted(false); setPrResult(null) }}
+      />
     </div>
   )
 }

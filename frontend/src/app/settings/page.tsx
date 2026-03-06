@@ -18,21 +18,37 @@ export default async function SettingsPage() {
       </div>
 
       <nav className="sticky top-0 z-50 border-b border-white/5 bg-black/50 backdrop-blur-2xl">
-        <div className="max-w-4xl mx-auto px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/dashboard" className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
-              <ArrowLeft className="h-4 w-4" />
-              Dashboard
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            <Link href="/" className="flex items-center space-x-3 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
+                <LogoIcon size="md" />
+              </div>
+              <div>
+                <span className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Contributors</span>
+                <span className="text-cyan-400 text-xs font-mono">.in</span>
+              </div>
             </Link>
-            <Link href="/" className="flex items-center space-x-2">
-              <LogoIcon size="sm" />
-              <span className="text-sm font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Contributors.in</span>
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/dashboard" className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+                <ArrowLeft className="h-4 w-4" /> Dashboard
+              </Link>
+              <Link href="/dashboard" className="flex items-center gap-2 pl-3 border-l border-white/10">
+                {session.user?.image ? (
+                  <img src={session.user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-cyan-500/30" />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                )}
+              </Link>
+            </div>
           </div>
         </div>
       </nav>
 
-      <main className="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 py-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white mb-2">Settings</h1>
           <p className="text-gray-400">Manage your account and preferences</p>

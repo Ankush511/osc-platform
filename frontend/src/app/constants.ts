@@ -61,8 +61,8 @@ export const IDE_LINES = [
 // ─── Stats ──────────────────────────────────────────────────────────────────
 export const STATS: Stat[] = [
   { value: "1.2K+", label: "Active Contributors", icon: Users },
-  { value: "3000+", label: "Open Issues", icon: CheckCircle2 },
-  { value: "300+", label: "Open Source Projects", icon: Star },
+  { value: "2.5K+", label: "Open Issues", icon: CheckCircle2 },
+  { value: "300+", label: "Open Source Repositories", icon: Star },
 ];
 
 // ─── Features ───────────────────────────────────────────────────────────────

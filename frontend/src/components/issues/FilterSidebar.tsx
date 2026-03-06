@@ -80,7 +80,7 @@ export default function FilterSidebar({ filters, availableFilters, onFilterChang
     (filters.programming_languages?.length || 0) > 0 ||
     (filters.labels?.length || 0) > 0 ||
     (filters.difficulty_levels?.length || 0) > 0 ||
-    !!filters.status
+    (!!filters.status && filters.status !== "available")
 
   return (
     <div className="bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-sm border border-white/10 rounded-2xl p-5 space-y-6">
@@ -88,7 +88,7 @@ export default function FilterSidebar({ filters, availableFilters, onFilterChang
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-white">Filters</h3>
         {hasActive && (
-          <button onClick={() => onFilterChange({})} className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors">
+          <button onClick={() => onFilterChange({ status: "available" })} className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors">
             <X className="h-3 w-3" /> Clear all
           </button>
         )}
@@ -115,10 +115,10 @@ export default function FilterSidebar({ filters, availableFilters, onFilterChang
               <button onClick={() => toggleFilter("difficulty_levels", d)}><X className="h-3 w-3" /></button>
             </span>
           ))}
-          {filters.status && (
+          {filters.status && filters.status !== "available" && (
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
               {STATUS_OPTIONS.find(o => o.value === filters.status)?.label || filters.status}
-              <button onClick={() => onFilterChange({ ...filters, status: undefined })}><X className="h-3 w-3" /></button>
+              <button onClick={() => onFilterChange({ ...filters, status: "available" })}><X className="h-3 w-3" /></button>
             </span>
           )}
         </div>
@@ -227,7 +227,7 @@ export default function FilterSidebar({ filters, availableFilters, onFilterChang
             return (
               <button
                 key={opt.value}
-                onClick={() => onFilterChange({ ...filters, status: active ? undefined : opt.value as IssueFilters["status"] })}
+                onClick={() => onFilterChange({ ...filters, status: active ? "available" : opt.value as IssueFilters["status"] })}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   active ? opt.color : "text-gray-400 bg-white/[0.03] border-white/10 hover:bg-white/5"
                 }`}

@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function IssueDiscoveryClient({ availableFilters }: Props) {
-  const [filters, setFilters] = useState<IssueFilters>({})
+  const [filters, setFilters] = useState<IssueFilters>({ status: "available" })
   const [searchQuery, setSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [issuesData, setIssuesData] = useState<PaginatedIssuesResponse | null>(null)

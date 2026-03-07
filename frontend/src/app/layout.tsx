@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Open Source Contribution Platform",
+  title: "Contributors.in",
   description: "Discover and contribute to open source projects",
 };
 
